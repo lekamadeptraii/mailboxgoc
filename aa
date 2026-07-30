@@ -356,6 +356,1242 @@ local function ApplyHover(btn)
 end
 
 -- ==========================================
+-- CUSTOM DRAG + RESIZE HELPERS (Mouse & Touch)
+-- ==========================================
+local function MakeDraggable(frame, handle)
+    handle = handle or frame
+    local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
+
+    local function onBegan(inp)
+        local isMouse = inp.UserInputType == Enum.UserInputType.MouseButton1
+        local isTouch = inp.UserInputType == Enum.UserInputType.Touch
+        if isMouse or isTouch then
+            dragging  = true
+            dragStart = inp.Position
+            startPos  = frame.Position
+            inp.Changed:Connect(function()
+                if inp.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end
+    local function onChanged(inp)
+        local isMM = inp.UserInputType == Enum.UserInputType.MouseMovement
+        local isT  = inp.UserInputType == Enum.UserInputType.Touch
+        if isMM or isT then dragInput = inp end
+    end
+
+    handle.InputBegan:Connect(onBegan)
+    handle.InputChanged:Connect(onChanged)
+    UserInputService.InputChanged:Connect(function(inp)
+        if inp == dragInput and dragging then
+            local d = inp.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + d.X,
+                startPos.Y.Scale, startPos.Y.Offset + d.Y
+            )
+        end
+    end)
+end
+
+-- Resize drag helper — attaches to a handle element, resizes `frame`
+local MIN_W, MAX_W = 200, 420
+local MIN_H, MAX_H = 300, 620
+local function MakeResizable(frame, handle)
+    local resizing, resizeInput, resizeStart, startSize = false, nil, nil, nil
+
+    local function onBegan(inp)
+        local isMouse = inp.UserInputType == Enum.UserInputType.MouseButton1
+        local isTouch = inp.UserInputType == Enum.UserInputType.Touch
+        if isMouse or isTouch then
+            resizing    = true
+            resizeStart = inp.Position
+            startSize   = frame.AbsoluteSize
+            inp.Changed:Connect(function()
+                if inp.UserInputState == Enum.UserInputState.End then resizing = false end
+            end)
+        end
+    end
+    local function onChanged(inp)
+        local isMM = inp.UserInputType == Enum.UserInputType.MouseMovement
+        local isT  = inp.UserInputType == Enum.UserInputType.Touch
+        if isMM or isT then resizeInput = inp end
+    end
+
+    handle.InputBegan:Connect(onBegan)
+    handle.InputChanged:Connect(onChanged)
+    UserInputService.InputChanged:Connect(function(inp)
+        if inp == resizeInput and resizing then
+            local d = inp.Position - resizeStart
+            local nw = math.clamp(startSize.X + d.X, MIN_W, MAX_W)
+            local nh = math.clamp(startSize.Y + d.Y, MIN_H, MAX_H)
+            frame.Size = UDim2.new(0, nw, 0, nh)
+        end
+    end)
+end
+
+-- ==========================================
+-- TOGGLE BUTTON
+-- ==========================================
+local ToggleBtn = Instance.new("TextButton")
+ToggleBtn.Parent           = ScreenGui
+ToggleBtn.BackgroundColor3 = Color3.fromRGB(0,140,255)
+ToggleBtn.Position         = UDim2.new(0.1,0,0.1,0)
+ToggleBtn.Size             = UDim2.new(0,50,0,50)
+ToggleBtn.Font             = Enum.Font.GothamBold
+ToggleBtn.Text             = "📩"
+ToggleBtn.TextColor3       = Color3.fromRGB(255,255,255)
+ToggleBtn.TextSize         = 24
+ToggleBtn.Active           = true
+Instance.new("UICorner",ToggleBtn).CornerRadius = UDim.new(1,0)
+local tbs = Instance.new("UIStroke",ToggleBtn)
+tbs.Color=Color3.fromRGB(255,255,255); tbs.Thickness=2
+ApplyHover(ToggleBtn)
+MakeDraggable(ToggleBtn)   -- custom drag
+
+-- ==========================================
+-- MAIN FRAME  (height = 450 for extra rows)
+-- ==========================================
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent           = ScreenGui
+MainFrame.BackgroundColor3 = Color3.fromRGB(18,18,24)
+MainFrame.Position         = UDim2.new(0.5,-135,0.3,-170)
+MainFrame.Size             = UDim2.new(0,270,0,450)
+MainFrame.Active           = true
+Instance.new("UICorner",MainFrame).CornerRadius = UDim.new(0,10)
+local ms = Instance.new("UIStroke",MainFrame)
+ms.Color=Color3.fromRGB(0,140,255); ms.Thickness=1.5
+MakeDraggable(MainFrame)   -- custom drag (mouse + touch)
+
+-- Resize grip handle at bottom-right corner
+local ResizeHandle = Instance.new("TextButton")
+ResizeHandle.Parent            = MainFrame
+ResizeHandle.BackgroundColor3  = Color3.fromRGB(0,140,255)
+ResizeHandle.BackgroundTransparency = 0.4
+ResizeHandle.Position          = UDim2.new(1,-22,1,-22)
+ResizeHandle.Size              = UDim2.new(0,18,0,18)
+ResizeHandle.Text              = "⤡"
+ResizeHandle.TextColor3        = Color3.fromRGB(255,255,255)
+ResizeHandle.TextSize          = 12
+ResizeHandle.Font              = Enum.Font.GothamBold
+ResizeHandle.ZIndex            = 10
+ResizeHandle.Active            = true
+ResizeHandle.AutoButtonColor   = false
+Instance.new("UICorner",ResizeHandle).CornerRadius = UDim.new(0,4)
+ResizeHandle.MouseEnter:Connect(function()
+    TweenService:Create(ResizeHandle,TweenInfo.new(0.15),{BackgroundTransparency=0.1}):Play()
+end)
+ResizeHandle.MouseLeave:Connect(function()
+    TweenService:Create(ResizeHandle,TweenInfo.new(0.2),{BackgroundTransparency=0.4}):Play()
+end)
+MakeResizable(MainFrame, ResizeHandle)
+
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Parent              = MainFrame
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Size                = UDim2.new(1,0,1,0)
+ContentContainer.ClipsDescendants    = true
+
+local isOpen = true
+ToggleBtn.MouseButton1Click:Connect(function()
+    isOpen = not isOpen
+    if isOpen then
+        MainFrame.Visible = true
+        TweenService:Create(MainFrame,TweenInfo.new(0.4,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,270,0,450)}):Play()
+    else
+        local t=TweenService:Create(MainFrame,TweenInfo.new(0.3,Enum.EasingStyle.Quart,Enum.EasingDirection.In),{Size=UDim2.new(0,270,0,0)})
+        t:Play(); t.Completed:Wait(); MainFrame.Visible=false
+    end
+end)
+
+local Title = Instance.new("TextLabel",ContentContainer)
+Title.BackgroundTransparency=1; Title.Size=UDim2.new(1,0,0,40)
+Title.Font=Enum.Font.GothamBold; Title.Text="Mail Box By Le Kama"
+Title.TextColor3=Color3.fromRGB(255,255,255); Title.TextSize=16
+
+local Line = Instance.new("Frame",ContentContainer)
+Line.BackgroundColor3=Color3.fromRGB(40,40,50); Line.Position=UDim2.new(0,10,0,38)
+Line.Size=UDim2.new(1,-20,0,1); Line.BorderSizePixel=0
+
+local StatusLabel = Instance.new("TextLabel",ContentContainer)
+StatusLabel.BackgroundTransparency=1; StatusLabel.Position=UDim2.new(0,0,1,-25)
+StatusLabel.Size=UDim2.new(1,0,0,25); StatusLabel.Font=Enum.Font.Gotham
+StatusLabel.Text="Awaiting Key..."; StatusLabel.TextColor3=Color3.fromRGB(150,150,150)
+StatusLabel.TextSize=11
+
+local function UpdateStatus(txt,col)
+    StatusLabel.Text=txt; StatusLabel.TextColor3=col or Color3.fromRGB(150,150,150)
+    StatusLabel.TextSize=13
+    TweenService:Create(StatusLabel,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{TextSize=11}):Play()
+end
+
+-- ==========================================
+-- HISTORY FRAME
+-- ==========================================
+local ToggleHistoryBtn = Instance.new("TextButton",ContentContainer)
+ToggleHistoryBtn.BackgroundColor3=Color3.fromRGB(35,35,45)
+ToggleHistoryBtn.Position=UDim2.new(1,-40,0,8); ToggleHistoryBtn.Size=UDim2.new(0,30,0,24)
+ToggleHistoryBtn.Font=Enum.Font.GothamBold; ToggleHistoryBtn.Text="👁️"
+ToggleHistoryBtn.TextColor3=Color3.fromRGB(255,255,255); ToggleHistoryBtn.TextSize=12
+Instance.new("UICorner",ToggleHistoryBtn).CornerRadius=UDim.new(0,6)
+ApplyHover(ToggleHistoryBtn)
+
+local HistoryFrame = Instance.new("Frame",MainFrame)
+HistoryFrame.BackgroundColor3=Color3.fromRGB(18,18,24)
+HistoryFrame.Position=UDim2.new(1,10,0,0); HistoryFrame.Size=UDim2.new(0,0,1,0)
+HistoryFrame.Visible=false; HistoryFrame.ClipsDescendants=true
+Instance.new("UICorner",HistoryFrame).CornerRadius=UDim.new(0,10)
+local hs=Instance.new("UIStroke",HistoryFrame); hs.Color=Color3.fromRGB(0,140,255); hs.Thickness=1.5
+
+local HistoryTitle = Instance.new("TextLabel",HistoryFrame)
+HistoryTitle.BackgroundTransparency=1; HistoryTitle.Size=UDim2.new(0,180,0,40)
+HistoryTitle.Font=Enum.Font.GothamBold; HistoryTitle.Text="📜 HISTORY LOG"
+HistoryTitle.TextColor3=Color3.fromRGB(0,140,255); HistoryTitle.TextSize=15
+
+-- [NEW] Clear history button
+local ClearHistoryBtn = Instance.new("TextButton",HistoryFrame)
+ClearHistoryBtn.BackgroundColor3=Color3.fromRGB(180,30,30)
+ClearHistoryBtn.Position=UDim2.new(0,188,0,9); ClearHistoryBtn.Size=UDim2.new(0,42,0,22)
+ClearHistoryBtn.Font=Enum.Font.GothamBold; ClearHistoryBtn.Text="🗑 CLR"
+ClearHistoryBtn.TextColor3=Color3.fromRGB(255,255,255); ClearHistoryBtn.TextSize=10
+Instance.new("UICorner",ClearHistoryBtn).CornerRadius=UDim.new(0,5)
+ApplyHover(ClearHistoryBtn)
+
+local HLine = Instance.new("Frame",HistoryFrame)
+HLine.BackgroundColor3=Color3.fromRGB(40,40,50); HLine.Position=UDim2.new(0,10,0,38)
+HLine.Size=UDim2.new(0,220,0,1); HLine.BorderSizePixel=0
+
+local HistoryScroll = Instance.new("ScrollingFrame",HistoryFrame)
+HistoryScroll.BackgroundColor3=Color3.fromRGB(15,15,20)
+HistoryScroll.Position=UDim2.new(0,10,0,45); HistoryScroll.Size=UDim2.new(0,220,1,-75)
+HistoryScroll.CanvasSize=UDim2.new(0,0,0,0); HistoryScroll.ScrollBarThickness=3
+Instance.new("UICorner",HistoryScroll).CornerRadius=UDim.new(0,6)
+
+local HListLayout = Instance.new("UIListLayout",HistoryScroll)
+HListLayout.SortOrder=Enum.SortOrder.LayoutOrder; HListLayout.Padding=UDim.new(0,5)
+HListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    HistoryScroll.CanvasSize=UDim2.new(0,0,0,HListLayout.AbsoluteContentSize.Y+10)
+end)
+
+local HFooter = Instance.new("TextLabel",HistoryFrame)
+HFooter.BackgroundTransparency=1; HFooter.Position=UDim2.new(0,0,1,-25)
+HFooter.Size=UDim2.new(0,240,0,20); HFooter.Font=Enum.Font.Gotham
+HFooter.Text="Le Kama / @_bot122"; HFooter.TextColor3=Color3.fromRGB(120,120,120); HFooter.TextSize=11
+
+ClearHistoryBtn.MouseButton1Click:Connect(function()
+    for _,c in ipairs(HistoryScroll:GetChildren()) do
+        if not c:IsA("UIListLayout") then c:Destroy() end
+    end
+    UpdateStatus("History cleared.", Color3.fromRGB(150,150,150))
+end)
+
+local historyOpen = false
+ToggleHistoryBtn.MouseButton1Click:Connect(function()
+    historyOpen = not historyOpen
+    if historyOpen then
+        HistoryFrame.Visible=true
+        TweenService:Create(HistoryFrame,TweenInfo.new(0.35,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{Size=UDim2.new(0,240,1,0)}):Play()
+    else
+        local t=TweenService:Create(HistoryFrame,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.In),{Size=UDim2.new(0,0,1,0)})
+        t:Play(); t.Completed:Wait()
+        if not historyOpen then HistoryFrame.Visible=false end
+    end
+end)
+
+-- ==========================================
+-- HISTORY LOG BUILDERS
+-- ==========================================
+local function ScrollToBottom()
+    task.wait()
+    HistoryScroll.CanvasPosition=Vector2.new(0,HistoryScroll.AbsoluteCanvasSize.Y)
+end
+
+-- [NEW] Gift log with small avatar thumbnail
+local function AddHistoryLog(target, itemsPayload, avatarUrl)
+    local lines = 1
+    local txt = "📤 To: "..target
+    for n,a in pairs(itemsPayload) do
+        txt = txt..string.format("\n- Sent (%d) %s", a, n); lines+=1
+    end
+
+    local rowH = 18 + lines*14 + (avatarUrl~="" and 38 or 0)
+    local LogItem = Instance.new("Frame", HistoryScroll)
+    LogItem.BackgroundColor3 = Color3.fromRGB(28,28,36)
+    LogItem.Size = UDim2.new(1,0,0,rowH)
+    Instance.new("UICorner",LogItem).CornerRadius=UDim.new(0,6)
+
+    -- avatar thumbnail (small, top-right)
+    if avatarUrl and avatarUrl~="" then
+        local av = Instance.new("ImageLabel",LogItem)
+        av.BackgroundTransparency=1; av.Image=avatarUrl
+        av.Position=UDim2.new(1,-36,0,4); av.Size=UDim2.new(0,32,0,32)
+        Instance.new("UICorner",av).CornerRadius=UDim.new(1,0)
+    end
+
+    local lbl = Instance.new("TextLabel",LogItem)
+    lbl.BackgroundTransparency=1
+    lbl.Position=UDim2.new(0,6,0,4)
+    lbl.Size= avatarUrl~="" and UDim2.new(1,-44,1,-8) or UDim2.new(1,-8,1,-8)
+    lbl.Font=Enum.Font.GothamBold; lbl.Text=txt
+    lbl.TextColor3=Color3.fromRGB(46,204,113); lbl.TextSize=11
+    lbl.TextWrapped=true; lbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    ScrollToBottom()
+end
+
+-- [NEW] MAX LIMIT log entry
+local function AddLimitLog(target)
+    local LogItem = Instance.new("Frame", HistoryScroll)
+    LogItem.BackgroundColor3 = Color3.fromRGB(60,15,15)
+    LogItem.Size = UDim2.new(1,0,0,46)
+    Instance.new("UICorner",LogItem).CornerRadius=UDim.new(0,6)
+
+    local lbl = Instance.new("TextLabel",LogItem)
+    lbl.BackgroundTransparency=1; lbl.Position=UDim2.new(0,6,0,4)
+    lbl.Size=UDim2.new(1,-12,1,-8); lbl.Font=Enum.Font.GothamBold
+    lbl.Text="❌ MAX LIMIT DAY CANT GIFT\nTo: "..target
+    lbl.TextColor3=Color3.fromRGB(231,76,60); lbl.TextSize=11
+    lbl.TextWrapped=true; lbl.TextXAlignment=Enum.TextXAlignment.Left
+
+    ScrollToBottom()
+end
+
+local function AddClaimedLog(itemsPayload)
+    local lines=0; local txt="📬 Claimed Mail"
+    if type(itemsPayload)=="table" and next(itemsPayload) then
+        for n,a in pairs(itemsPayload) do txt=txt..string.format("\n(%s) %s",tostring(a),tostring(n)); lines+=1 end
+    else txt=txt.."\n(Unknown Items)"; lines=1 end
+    local LogItem=Instance.new("TextLabel",HistoryScroll)
+    LogItem.BackgroundColor3=Color3.fromRGB(35,28,18); LogItem.Size=UDim2.new(1,0,0,15+lines*14)
+    LogItem.Font=Enum.Font.GothamBold; LogItem.Text=txt
+    LogItem.TextColor3=Color3.fromRGB(243,156,18); LogItem.TextSize=11; LogItem.TextWrapped=true
+    Instance.new("UICorner",LogItem).CornerRadius=UDim.new(0,6)
+    ScrollToBottom()
+end
+
+-- ====================
+-- AUTO CLAIM MODULE
+-- ====================
+local AutoClaimBtn    = Instance.new("TextButton")
+local isAutoClaiming  = false
+
+local function ToggleAutoClaim(force)
+    if force~=nil then if isAutoClaiming==force then return end; isAutoClaiming=force
+    else isAutoClaiming=not isAutoClaiming end
+
+    local env = type(getgenv)=="function" and getgenv() or _G
+    local key = "__GardenAutoClaimMailbox"
+
+    if isAutoClaiming then
+        AutoClaimBtn.Text="🛑 STOP CLAIM"
+        TweenService:Create(AutoClaimBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(231,76,60)}):Play()
+        UpdateStatus("Auto Claim running...",Color3.fromRGB(46,204,113))
+        if type(env[key])=="table" and type(env[key].Shutdown)=="function" then pcall(env[key].Shutdown) end
+
+        local Cfg={Enabled=true,PollInterval=0.2,RetryDelay=2,MaxClaimsPerPass=999}
+        local self={Running=true,Busy=false,Wake=true,Inbox=nil,RetryAt={},Connections={}}
+        env[key]=self
+
+        function self.Shutdown()
+            self.Running=false
+            for _,c in ipairs(self.Connections) do pcall(function() c:Disconnect() end) end
+            if env[key]==self then env[key]=nil end
+        end
+
+        local function claimAll()
+            if self.Busy or not Cfg.Enabled then return end
+            self.Busy=true
+            local inbox=self.Inbox or (function()
+                local ok,r=pcall(function() return Net.Mailbox.OpenInbox:Fire() end)
+                return ok and typeof(r)=="table" and (r.Mailbox or r) or nil
+            end)()
+            self.Inbox=nil; local found=0
+            if inbox then
+                for mailId in pairs(inbox) do
+                    if not self.Running or found>=Cfg.MaxClaimsPerPass then break end
+                    if type(mailId)=="string" and (self.RetryAt[mailId] or 0)<=os.clock() then
+                        found+=1
+                        local md=type(inbox[mailId])=="table" and inbox[mailId] or nil
+                        task.spawn(function()
+                            local ok,s=pcall(function() return Net.Mailbox.Claim:Fire(mailId) end)
+                            if ok and s then
+                                self.RetryAt[mailId]=nil
+                                pcall(function()
+                                    local ci={}
+                                    if type(md)=="table" then
+                                        local it=md.Items or md.Batch or md.Contents or md.Gifts or {}
+                                        if type(it)=="table" then
+                                            for _,i2 in ipairs(it) do
+                                                if type(i2)=="table" then
+                                                    local n=i2.ItemKey or i2.Name or i2.Item or "Item"
+                                                    local c=i2.Count or i2.Amount or i2.Quantity or 1
+                                                    ci[tostring(n)]=(ci[tostring(n)]or 0)+c
+                                                end
+                                            end
+                                        end
+                                        if not next(ci) then
+                                            for k,v in pairs(md) do
+                                                if type(k)=="string" and type(v)=="number" and k~="MailId" and k~="SenderId" and k~="Timestamp" then ci[k]=v end
+                                            end
+                                        end
+                                    end
+                                    AddClaimedLog(next(ci) and ci or nil)
+                                end)
+                            else self.RetryAt[mailId]=os.clock()+Cfg.RetryDelay end
+                        end)
+                    end
+                end
+            end
+            self.Busy=false; self.Wake=found>0
+        end
+
+        table.insert(self.Connections, Net.Mailbox.Updated.OnClientEvent:Connect(function(u)
+            if typeof(u)=="table" and typeof(u.Mailbox)=="table" then self.Inbox=u.Mailbox end
+            self.Wake=true
+        end))
+        task.spawn(function()
+            while self.Running do
+                if self.Wake then self.Wake=false; claimAll() end
+                task.wait(Cfg.PollInterval); self.Wake=Cfg.Enabled
+            end
+        end)
+    else
+        AutoClaimBtn.Text="📥 AUTO CLAIM"
+        TweenService:Create(AutoClaimBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(243,156,18)}):Play()
+        UpdateStatus("Auto Claim stopped.",Color3.fromRGB(150,150,150))
+        if type(env[key])=="table" and type(env[key].Shutdown)=="function" then pcall(env[key].Shutdown) end
+    end
+end
+AutoClaimBtn.MouseButton1Click:Connect(function() ToggleAutoClaim() end)
+
+-- ====================
+-- AUTH FRAME
+-- ====================
+local KeyFrame = Instance.new("Frame",ContentContainer)
+KeyFrame.BackgroundTransparency=1; KeyFrame.Size=UDim2.new(1,0,1,0); KeyFrame.Visible=true
+
+local KeyInput = Instance.new("TextBox",KeyFrame)
+KeyInput.BackgroundColor3=Color3.fromRGB(28,28,36); KeyInput.Position=UDim2.new(0,20,0,120)
+KeyInput.Size=UDim2.new(0,230,0,35); KeyInput.Font=Enum.Font.Gotham
+KeyInput.PlaceholderText="Enter Access Key..."; KeyInput.Text=""
+KeyInput.TextColor3=Color3.fromRGB(255,255,255); KeyInput.TextSize=13
+Instance.new("UICorner",KeyInput).CornerRadius=UDim.new(0,6)
+Instance.new("UIStroke",KeyInput).Color=Color3.fromRGB(50,50,60)
+
+local CheckKeyBtn = Instance.new("TextButton",KeyFrame)
+CheckKeyBtn.BackgroundColor3=Color3.fromRGB(0,140,255); CheckKeyBtn.Position=UDim2.new(0,20,0,165)
+CheckKeyBtn.Size=UDim2.new(0,230,0,35); CheckKeyBtn.Font=Enum.Font.GothamBold
+CheckKeyBtn.Text="AUTHENTICATE"; CheckKeyBtn.TextColor3=Color3.fromRGB(255,255,255); CheckKeyBtn.TextSize=13
+Instance.new("UICorner",CheckKeyBtn).CornerRadius=UDim.new(0,6); ApplyHover(CheckKeyBtn)
+
+local HwidHolder = Instance.new("Frame",KeyFrame)
+HwidHolder.BackgroundTransparency=1; HwidHolder.Position=UDim2.new(0,0,0,220); HwidHolder.Size=UDim2.new(0,270,0,50)
+
+local HwidLabel = Instance.new("TextBox",HwidHolder)
+HwidLabel.BackgroundColor3=Color3.fromRGB(20,20,26); HwidLabel.Position=UDim2.new(0,20,0,0)
+HwidLabel.Size=UDim2.new(0,165,0,30); HwidLabel.Font=Enum.Font.Gotham; HwidLabel.Text="Loading HWID..."
+HwidLabel.ClearTextOnFocus=false; HwidLabel.TextEditable=false
+HwidLabel.TextColor3=Color3.fromRGB(255,100,100); HwidLabel.TextSize=10
+Instance.new("UICorner",HwidLabel).CornerRadius=UDim.new(0,6)
+Instance.new("UIStroke",HwidLabel).Color=Color3.fromRGB(40,40,50)
+
+local CopyHwidBtn = Instance.new("TextButton",HwidHolder)
+CopyHwidBtn.BackgroundColor3=Color3.fromRGB(230,126,34); CopyHwidBtn.Position=UDim2.new(0,195,0,0)
+CopyHwidBtn.Size=UDim2.new(0,55,0,30); CopyHwidBtn.Font=Enum.Font.GothamBold
+CopyHwidBtn.Text="COPY"; CopyHwidBtn.TextColor3=Color3.fromRGB(255,255,255); CopyHwidBtn.TextSize=11
+Instance.new("UICorner",CopyHwidBtn).CornerRadius=UDim.new(0,6); ApplyHover(CopyHwidBtn)
+
+local ok2,RealHWID=pcall(function()
+    if type(gethwid)=="function" then local h=gethwid(); if type(h)=="string" and h~="" then return h end end
+    return game:GetService("RbxAnalyticsService"):GetClientId()
+end)
+if ok2 and type(RealHWID)=="string" and RealHWID~="" then
+    RealHWID=RealHWID:gsub("%s+",""); HwidLabel.Text=RealHWID
+else
+    local fb=""; for i=1,32 do fb=fb..string.sub("ABCDEF0123456789",math.random(1,16),math.random(1,16)) end
+    RealHWID=fb; HwidLabel.Text="Temp: "..RealHWID:sub(1,8)
+end
+
+CopyHwidBtn.MouseButton1Click:Connect(function()
+    if setclipboard then pcall(function() setclipboard(RealHWID) end) end
+    CopyHwidBtn.Text="DONE"
+    TweenService:Create(CopyHwidBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+    task.wait(1.5); CopyHwidBtn.Text="COPY"
+    TweenService:Create(CopyHwidBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(230,126,34)}):Play()
+end)
+
+-- ====================
+-- GIFT FRAME
+-- ====================
+local GiftFrame = Instance.new("Frame",ContentContainer)
+GiftFrame.BackgroundTransparency=1; GiftFrame.Size=UDim2.new(1,0,1,0); GiftFrame.Visible=false
+
+-- Username + Verify
+local UserInput = Instance.new("TextBox",GiftFrame)
+UserInput.BackgroundColor3=Color3.fromRGB(28,28,36); UserInput.Position=UDim2.new(0,15,0,40)
+UserInput.Size=UDim2.new(0,160,0,32); UserInput.Font=Enum.Font.Gotham
+UserInput.PlaceholderText="Target Username..."; UserInput.Text=""
+UserInput.TextColor3=Color3.fromRGB(255,255,255); UserInput.TextSize=12
+Instance.new("UICorner",UserInput).CornerRadius=UDim.new(0,6)
+Instance.new("UIStroke",UserInput).Color=Color3.fromRGB(50,50,60)
+
+local VerifyBtn = Instance.new("TextButton",GiftFrame)
+VerifyBtn.BackgroundColor3=Color3.fromRGB(0,140,255); VerifyBtn.Position=UDim2.new(0,185,0,40)
+VerifyBtn.Size=UDim2.new(0,70,0,32); VerifyBtn.Font=Enum.Font.GothamBold
+VerifyBtn.Text="VERIFY"; VerifyBtn.TextColor3=Color3.fromRGB(255,255,255); VerifyBtn.TextSize=11
+Instance.new("UICorner",VerifyBtn).CornerRadius=UDim.new(0,6); ApplyHover(VerifyBtn)
+
+-- Search
+local SearchBox = Instance.new("TextBox",GiftFrame)
+SearchBox.BackgroundColor3=Color3.fromRGB(20,20,25); SearchBox.Position=UDim2.new(0,15,0,76)
+SearchBox.Size=UDim2.new(0,240,0,26); SearchBox.Font=Enum.Font.Gotham
+SearchBox.PlaceholderText="🔍 Search item..."; SearchBox.Text=""
+SearchBox.TextColor3=Color3.fromRGB(255,255,255); SearchBox.TextSize=11; SearchBox.ClearTextOnFocus=false
+Instance.new("UICorner",SearchBox).CornerRadius=UDim.new(0,4)
+Instance.new("UIStroke",SearchBox).Color=Color3.fromRGB(50,50,60)
+
+-- Daily counter label
+local DailyLimitLabel = Instance.new("TextLabel",GiftFrame)
+DailyLimitLabel.BackgroundTransparency=1; DailyLimitLabel.Position=UDim2.new(0,15,0,105)
+DailyLimitLabel.Size=UDim2.new(0,240,0,15); DailyLimitLabel.Font=Enum.Font.GothamBold
+DailyLimitLabel.Text=string.format("Daily Gifts: %d/50",dailyData.count)
+DailyLimitLabel.TextColor3=dailyData.count>=50 and Color3.fromRGB(231,76,60) or Color3.fromRGB(46,204,113)
+DailyLimitLabel.TextSize=11; DailyLimitLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+-- Scroll list
+local ScrollList = Instance.new("ScrollingFrame",GiftFrame)
+ScrollList.BackgroundColor3=Color3.fromRGB(15,15,20); ScrollList.Position=UDim2.new(0,15,0,123)
+ScrollList.Size=UDim2.new(0,240,0,100); ScrollList.CanvasSize=UDim2.new(0,0,0,0)
+ScrollList.ScrollBarThickness=3
+Instance.new("UICorner",ScrollList).CornerRadius=UDim.new(0,6)
+Instance.new("UIStroke",ScrollList).Color=Color3.fromRGB(40,40,50)
+
+local ListLayout = Instance.new("UIListLayout",ScrollList)
+ListLayout.SortOrder=Enum.SortOrder.LayoutOrder; ListLayout.Padding=UDim.new(0,4)
+
+-- Refresh + Gift once
+local ResetInvBtn = Instance.new("TextButton",GiftFrame)
+ResetInvBtn.BackgroundColor3=Color3.fromRGB(60,60,70); ResetInvBtn.Position=UDim2.new(0,15,0,229)
+ResetInvBtn.Size=UDim2.new(0,35,0,28); ResetInvBtn.Font=Enum.Font.GothamBold
+ResetInvBtn.Text="🔄"; ResetInvBtn.TextColor3=Color3.fromRGB(255,255,255); ResetInvBtn.TextSize=14
+Instance.new("UICorner",ResetInvBtn).CornerRadius=UDim.new(0,6); ApplyHover(ResetInvBtn)
+
+local GiftBtn = Instance.new("TextButton",GiftFrame)
+GiftBtn.BackgroundColor3=Color3.fromRGB(46,204,113); GiftBtn.Position=UDim2.new(0,55,0,229)
+GiftBtn.Size=UDim2.new(0,200,0,28); GiftBtn.Font=Enum.Font.GothamBold
+GiftBtn.Text="GIFT ONCE"; GiftBtn.TextColor3=Color3.fromRGB(255,255,255); GiftBtn.TextSize=12
+Instance.new("UICorner",GiftBtn).CornerRadius=UDim.new(0,6); ApplyHover(GiftBtn)
+
+-- Auto gift + Auto claim
+local AutoGiftBtn = Instance.new("TextButton",GiftFrame)
+AutoGiftBtn.BackgroundColor3=Color3.fromRGB(155,89,182); AutoGiftBtn.Position=UDim2.new(0,15,0,263)
+AutoGiftBtn.Size=UDim2.new(0,115,0,28); AutoGiftBtn.Font=Enum.Font.GothamBold
+AutoGiftBtn.Text="⚡ AUTO GIFT"; AutoGiftBtn.TextColor3=Color3.fromRGB(255,255,255); AutoGiftBtn.TextSize=11
+Instance.new("UICorner",AutoGiftBtn).CornerRadius=UDim.new(0,6); ApplyHover(AutoGiftBtn)
+
+AutoClaimBtn.Parent=GiftFrame; AutoClaimBtn.BackgroundColor3=Color3.fromRGB(243,156,18)
+AutoClaimBtn.Position=UDim2.new(0,140,0,263); AutoClaimBtn.Size=UDim2.new(0,115,0,28)
+AutoClaimBtn.Font=Enum.Font.GothamBold; AutoClaimBtn.Text="📥 AUTO CLAIM"
+AutoClaimBtn.TextColor3=Color3.fromRGB(255,255,255); AutoClaimBtn.TextSize=11
+Instance.new("UICorner",AutoClaimBtn).CornerRadius=UDim.new(0,6); ApplyHover(AutoClaimBtn)
+
+-- [NEW] Custom Note input
+local NoteLabel = Instance.new("TextLabel",GiftFrame)
+NoteLabel.BackgroundTransparency=1; NoteLabel.Position=UDim2.new(0,15,0,298)
+NoteLabel.Size=UDim2.new(0,50,0,14); NoteLabel.Font=Enum.Font.GothamBold
+NoteLabel.Text="📝 Note:"; NoteLabel.TextColor3=Color3.fromRGB(180,180,180)
+NoteLabel.TextSize=10; NoteLabel.TextXAlignment=Enum.TextXAlignment.Left
+
+local NoteInput = Instance.new("TextBox",GiftFrame)
+NoteInput.BackgroundColor3=Color3.fromRGB(20,20,26); NoteInput.Position=UDim2.new(0,15,0,313)
+NoteInput.Size=UDim2.new(0,240,0,26); NoteInput.Font=Enum.Font.Gotham
+NoteInput.PlaceholderText="Custom note (default: Bot Gift)..."; NoteInput.Text=""
+NoteInput.TextColor3=Color3.fromRGB(220,220,220); NoteInput.TextSize=11; NoteInput.ClearTextOnFocus=false
+Instance.new("UICorner",NoteInput).CornerRadius=UDim.new(0,6)
+local ns=Instance.new("UIStroke",NoteInput); ns.Color=Color3.fromRGB(80,80,100); ns.Thickness=1
+
+-- Webhook row
+local WebhookInput = Instance.new("TextBox",GiftFrame)
+WebhookInput.BackgroundColor3=Color3.fromRGB(20,20,26); WebhookInput.Position=UDim2.new(0,15,0,346)
+WebhookInput.Size=UDim2.new(0,188,0,26); WebhookInput.Font=Enum.Font.Gotham
+WebhookInput.PlaceholderText="🔗 Discord Webhook URL..."; WebhookInput.Text=getgenv().MailboxWebhookURL or ""
+WebhookInput.TextColor3=Color3.fromRGB(200,200,200); WebhookInput.TextSize=9; WebhookInput.ClearTextOnFocus=false
+WebhookInput.ClipsDescendants=true
+Instance.new("UICorner",WebhookInput).CornerRadius=UDim.new(0,6)
+local ws=Instance.new("UIStroke",WebhookInput); ws.Color=Color3.fromRGB(0,140,255); ws.Thickness=1
+
+local SaveWebhookBtn = Instance.new("TextButton",GiftFrame)
+SaveWebhookBtn.BackgroundColor3=Color3.fromRGB(0,140,255); SaveWebhookBtn.Position=UDim2.new(0,210,0,346)
+SaveWebhookBtn.Size=UDim2.new(0,45,0,26); SaveWebhookBtn.Font=Enum.Font.GothamBold
+SaveWebhookBtn.Text="SAVE"; SaveWebhookBtn.TextColor3=Color3.fromRGB(255,255,255); SaveWebhookBtn.TextSize=10
+Instance.new("UICorner",SaveWebhookBtn).CornerRadius=UDim.new(0,6); ApplyHover(SaveWebhookBtn)
+
+SaveWebhookBtn.MouseButton1Click:Connect(function()
+    local url=WebhookInput.Text:gsub("%s+",""); saveWebhookURL(url)
+    SaveWebhookBtn.Text="✓"
+    TweenService:Create(SaveWebhookBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+    UpdateStatus("Webhook saved!",Color3.fromRGB(46,204,113))
+    task.wait(1.5); SaveWebhookBtn.Text="SAVE"
+    TweenService:Create(SaveWebhookBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(0,140,255)}):Play()
+end)
+
+-- ==========================================
+-- INVENTORY UI REFRESH
+-- ==========================================
+local _lastInvData = {}
+
+local function RefreshInventoryUI()
+    local invData = getCleanInventory()
+    _lastInvData={}
+    for _,it in ipairs(invData) do _lastInvData[it.Name]=it.Count end
+
+    local cur={}; for _,it in ipairs(invData) do cur[it.Name]=it end
+    for _,c in ipairs(ScrollList:GetChildren()) do
+        if c:IsA("Frame") and not cur[c.Name] then c:Destroy() end
+    end
+
+    local filter=string.lower(SearchBox.Text)
+    local vis=0
+
+    for i,item in ipairs(invData) do
+        local ItemFrame=ScrollList:FindFirstChild(item.Name)
+        if not ItemFrame then
+            ItemFrame=Instance.new("Frame",ScrollList)
+            ItemFrame.Name=item.Name; ItemFrame.BackgroundColor3=Color3.fromRGB(25,25,30)
+            ItemFrame.Size=UDim2.new(1,-6,0,28)
+            Instance.new("UICorner",ItemFrame).CornerRadius=UDim.new(0,4)
+
+            local CB=Instance.new("TextButton",ItemFrame)
+            CB.Name="Checkbox"; CB.BackgroundColor3=Color3.fromRGB(40,40,45)
+            CB.Position=UDim2.new(0,4,0,4); CB.Size=UDim2.new(0,20,0,20)
+            CB.Font=Enum.Font.GothamBold; CB.Text=""; CB.TextColor3=Color3.fromRGB(46,204,113); CB.TextSize=12
+            Instance.new("UICorner",CB).CornerRadius=UDim.new(0,4)
+
+            local NL=Instance.new("TextLabel",ItemFrame)
+            NL.Name="NameLabel"; NL.BackgroundTransparency=1
+            NL.Position=UDim2.new(0,30,0,0); NL.Size=UDim2.new(0,130,1,0)
+            NL.Font=Enum.Font.Gotham; NL.Text=string.format("%s (x%d)",item.Name,item.Count)
+            NL.TextColor3=Color3.fromRGB(220,220,220); NL.TextXAlignment=Enum.TextXAlignment.Left
+            NL.TextSize=10; NL.TextTruncate=Enum.TextTruncate.AtEnd
+
+            local AB=Instance.new("TextBox",ItemFrame)
+            AB.Name="AmtBox"; AB.BackgroundColor3=Color3.fromRGB(20,20,25)
+            AB.Position=UDim2.new(1,-45,0,4); AB.Size=UDim2.new(0,40,0,20)
+            AB.Font=Enum.Font.Gotham; AB.Text="1"; AB.TextColor3=Color3.fromRGB(255,255,255); AB.TextSize=10
+            Instance.new("UICorner",AB).CornerRadius=UDim.new(0,4)
+            Instance.new("UIStroke",AB).Color=Color3.fromRGB(50,50,60)
+
+            -- Validate on FocusLost: warn only, do NOT change text
+            local cName=item.Name
+            AB.FocusLost:Connect(function()
+                local want=tonumber(AB.Text) or 1
+                local actual=_lastInvData[cName] or 0
+                if want < 1 then
+                    AB.Text="1"
+                elseif actual>0 and want>actual then
+                    -- warn only, keep user value so they see the problem
+                    AB.TextColor3=Color3.fromRGB(231,76,60)
+                    UpdateStatus("⚠ Not enough stock: "..cName.." (have "..actual..")",Color3.fromRGB(231,76,60))
+                    task.delay(3, function()
+                        if AB and AB.Parent then AB.TextColor3=Color3.fromRGB(255,255,255) end
+                    end)
+                end
+            end)
+
+            CB.MouseButton1Click:Connect(function()
+                if CB.Text=="✓" then CB.Text=""
+                else
+                    CB.Text="✓"
+                    TweenService:Create(CB,TweenInfo.new(0.1,Enum.EasingStyle.Sine),{TextSize=16}):Play()
+                    task.wait(0.1)
+                    TweenService:Create(CB,TweenInfo.new(0.1,Enum.EasingStyle.Sine),{TextSize=12}):Play()
+                end
+            end)
+        else
+            local NL=ItemFrame:FindFirstChild("NameLabel")
+            if NL then NL.Text=string.format("%s (x%d)",item.Name,item.Count) end
+        end
+        ItemFrame.LayoutOrder=i
+        if filter=="" or string.find(string.lower(item.Name),filter) then
+            ItemFrame.Visible=true; vis+=1
+        else ItemFrame.Visible=false end
+    end
+    ScrollList.CanvasSize=UDim2.new(0,0,0,vis*32)
+end
+
+local function ResetAllAmounts()
+    for _,c in ipairs(ScrollList:GetChildren()) do
+        if c:IsA("Frame") then
+            local ab=c:FindFirstChild("AmtBox")
+            if ab then ab.Text="1"; ab.TextColor3=Color3.fromRGB(255,255,255) end
+        end
+    end
+end
+
+SearchBox:GetPropertyChangedSignal("Text"):Connect(RefreshInventoryUI)
+task.spawn(function()
+    while task.wait(2) do if GiftFrame.Visible then pcall(RefreshInventoryUI) end end
+end)
+ResetInvBtn.MouseButton1Click:Connect(function()
+    UpdateStatus("Refreshing...",Color3.fromRGB(241,196,15)); RefreshInventoryUI()
+    task.wait(0.3); UpdateStatus("Inventory updated.",Color3.fromRGB(46,204,113))
+end)
+
+-- ==========================================
+-- GET PAYLOAD  (validate only — no auto-fix)
+-- ==========================================
+local function GetPayloadFromUI()
+    local payload,has={},false
+    local invMap=getInvMap()
+    for _,child in ipairs(ScrollList:GetChildren()) do
+        if child:IsA("Frame") then
+            local cb=child:FindFirstChild("Checkbox")
+            local ab=child:FindFirstChild("AmtBox")
+            if cb and cb.Text=="✓" and ab then
+                local want=tonumber(ab.Text) or 1
+                local actual=invMap[child.Name] or 0
+                if actual<=0 then
+                    -- item gone, skip
+                elseif want>actual then
+                    -- warn only, abort send, do NOT change text
+                    ab.TextColor3=Color3.fromRGB(231,76,60)
+                    task.delay(3,function() if ab and ab.Parent then ab.TextColor3=Color3.fromRGB(255,255,255) end end)
+                    UpdateStatus("⚠ Not enough stock: "..child.Name.." (have "..actual..")",Color3.fromRGB(231,76,60))
+                    return {},false
+                else
+                    payload[child.Name]=math.min(want,199800); has=true
+                end
+            end
+        end
+    end
+    return payload,has
+end
+
+-- ==========================================
+-- AUTH
+-- ==========================================
+local function PerformAuthentication(key)
+    local kd=KEYS_DATABASE[key]
+    if kd and kd.IsAdmin==true then
+        UpdateStatus("Admin Bypass...",Color3.fromRGB(46,204,113)); task.wait(0.5)
+        KeyFrame.Visible=false; GiftFrame.Visible=true; RefreshInventoryUI(); return true
+    end
+    if not RealHWID or RealHWID=="" then UpdateStatus("Hardware ID error!",Color3.fromRGB(231,76,60)); return false end
+    if kd then
+        if kd.CheckExternalHWID then
+            UpdateStatus("Connecting...",Color3.fromRGB(241,196,15))
+            local link=kd.ExternalLink..(string.find(kd.ExternalLink,"?") and "&t=" or "?t=")..tostring(os.time())
+            local s,r=pcall(function() return game:HttpGet(link) end)
+            if s and r and r~="" then
+                local s2,l=pcall(function() return loadstring(r)() end)
+                if s2 and type(l)=="table" and l[RealHWID] then
+                    UpdateStatus("Verified!",Color3.fromRGB(46,204,113)); task.wait(0.5)
+                    KeyFrame.Visible=false; GiftFrame.Visible=true; RefreshInventoryUI(); return true
+                else LocalPlayer:Kick("Invalid HWID. Contact Admin."); return false end
+            else UpdateStatus("Network fetch failed!",Color3.fromRGB(231,76,60)); return false end
+        end
+    else UpdateStatus("Invalid Key!",Color3.fromRGB(231,76,60)); return false end
+end
+
+CheckKeyBtn.MouseButton1Click:Connect(function() PerformAuthentication(KeyInput.Text) end)
+if getgenv().script_key and getgenv().script_key~="" then
+    KeyInput.Text=getgenv().script_key
+    task.spawn(function() PerformAuthentication(getgenv().script_key) end)
+end
+
+VerifyBtn.MouseButton1Click:Connect(function()
+    local user=UserInput.Text:gsub("%s+","")
+    if user=="" then UpdateStatus("Enter Username!",Color3.fromRGB(231,76,60)); return end
+    UpdateStatus("Verifying...",Color3.fromRGB(241,196,15))
+    local ok,uid=pcall(function() return Net.Mailbox.LookupPlayer:Fire(user) end)
+    if ok and type(uid)=="number" and uid>0 then
+        IsVerified=true; VerifiedUser=user; CachedUID=uid
+        -- fetch & cache avatar
+        task.spawn(function() CachedAvatarURL=GetAvatarURL(uid) end)
+        VerifyBtn.Text="OK"
+        TweenService:Create(VerifyBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+        UpdateStatus("User verified!",Color3.fromRGB(46,204,113))
+    else
+        IsVerified=false; CachedUID=nil; CachedAvatarURL=""
+        VerifyBtn.Text="FAIL"
+        TweenService:Create(VerifyBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(231,76,60)}):Play()
+        UpdateStatus("User not found!",Color3.fromRGB(231,76,60))
+    end
+    task.wait(1.5)
+    if not IsVerified then
+        VerifyBtn.Text="VERIFY"
+        TweenService:Create(VerifyBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(0,140,255)}):Play()
+    end
+end)
+
+-- ==========================================
+-- GIFT ONCE
+-- ==========================================
+local isProcessingGift=false
+local function FireGift()
+    if isProcessingGift then return false end
+    local curText=UserInput.Text:gsub("%s+","")
+    if not IsVerified or curText=="" or curText~=VerifiedUser then
+        UpdateStatus("Verify user first!",Color3.fromRGB(231,76,60)); return false
+    end
+    local tp=os.clock()-(getgenv().LastGiftTime or 0)
+    if tp<GLOBAL_COOLDOWN then
+        UpdateStatus("Cooldown: "..math.ceil(GLOBAL_COOLDOWN-tp).."s",Color3.fromRGB(231,76,60)); return false
+    end
+
+    local payload,has=GetPayloadFromUI()
+    if not has then
+        if not next(payload) then
+            local any=false
+            for _,c in ipairs(ScrollList:GetChildren()) do
+                if c:IsA("Frame") then local cb=c:FindFirstChild("Checkbox"); if cb and cb.Text=="✓" then any=true; break end end
+            end
+            if not any then UpdateStatus("Select an item!",Color3.fromRGB(231,76,60)) end
+        end
+        return false
+    end
+
+    isProcessingGift=true; GiftBtn.Text="SENDING..."
+    UpdateStatus("Sending...",Color3.fromRGB(241,196,15))
+
+    local noteText=NoteInput.Text:gsub("%s+$",""):gsub("^%s+","")
+    local success,err=internalSendMail(VerifiedUser,payload,noteText)
+
+    if success then
+        dailyData.count+=1; saveDailyLimit()
+        DailyLimitLabel.Text=string.format("Daily Gifts: %d/50",dailyData.count)
+        DailyLimitLabel.TextColor3=dailyData.count>=50 and Color3.fromRGB(231,76,60) or Color3.fromRGB(46,204,113)
+
+        -- history log with avatar
+        AddHistoryLog(VerifiedUser,payload,CachedAvatarURL)
+        -- webhook
+        SendWebhook(VerifiedUser,CachedUID,payload,(noteText~="" and noteText or "Bot Gift"),CachedAvatarURL)
+        -- reset amounts to 1 AND uncheck all checkboxes
+        ResetAllAmounts()
+        for _,c in ipairs(ScrollList:GetChildren()) do
+            if c:IsA("Frame") then
+                local cb=c:FindFirstChild("Checkbox")
+                if cb then cb.Text="" end
+            end
+        end
+
+        GiftBtn.Text="✓ SENT!"
+        TweenService:Create(GiftBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(39,174,96)}):Play()
+        UpdateStatus("Gift sent! ("..dailyData.count.."/50)",Color3.fromRGB(46,204,113))
+        task.wait(1.5); GiftBtn.Text="GIFT ONCE"
+        TweenService:Create(GiftBtn,TweenInfo.new(0.3),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+    else
+        -- [NEW] If fail and over limit → log MAX LIMIT, else log generic fail
+        if dailyData.count>=50 then
+            AddLimitLog(VerifiedUser)
+            UpdateStatus("MAX LIMIT DAY CANT GIFT",Color3.fromRGB(231,76,60))
+        else
+            UpdateStatus("Failed: "..tostring(err or "?"),Color3.fromRGB(231,76,60))
+        end
+        GiftBtn.Text="✗ FAILED"
+        TweenService:Create(GiftBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(231,76,60)}):Play()
+        task.wait(2); GiftBtn.Text="GIFT ONCE"
+        TweenService:Create(GiftBtn,TweenInfo.new(0.3),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+    end
+
+    isProcessingGift=false; return success
+end
+GiftBtn.MouseButton1Click:Connect(function() FireGift() end)
+
+-- ==========================================
+-- AUTO GIFT
+-- ==========================================
+local isAutoGifting=false
+AutoGiftBtn.MouseButton1Click:Connect(function()
+    isAutoGifting=not isAutoGifting
+    if isAutoGifting then
+        AutoGiftBtn.Text="🛑 STOP AUTO"
+        TweenService:Create(AutoGiftBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(231,76,60)}):Play()
+        task.spawn(function()
+            while isAutoGifting do
+                local curText=UserInput.Text:gsub("%s+","")
+                if not IsVerified or curText~=VerifiedUser then
+                    UpdateStatus("Verify user first!",Color3.fromRGB(231,76,60)); isAutoGifting=false; break
+                end
+                local payload,has=GetPayloadFromUI()
+                if not has then
+                    if not next(payload) then
+                        UpdateStatus("No items selected!",Color3.fromRGB(231,76,60))
+                    end
+                    isAutoGifting=false; break
+                end
+                local tp=os.clock()-(getgenv().LastGiftTime or 0)
+                if tp<GLOBAL_COOLDOWN then task.wait(GLOBAL_COOLDOWN-tp+0.1) end
+                if not isAutoGifting then break end
+
+                local noteText=NoteInput.Text:gsub("%s+$",""):gsub("^%s+","")
+                local success,err=internalSendMail(VerifiedUser,payload,noteText)
+                if success then
+                    dailyData.count+=1; saveDailyLimit()
+                    DailyLimitLabel.Text=string.format("Daily Gifts: %d/50",dailyData.count)
+                    DailyLimitLabel.TextColor3=dailyData.count>=50 and Color3.fromRGB(231,76,60) or Color3.fromRGB(46,204,113)
+                    AddHistoryLog(VerifiedUser,payload,CachedAvatarURL)
+                    SendWebhook(VerifiedUser,CachedUID,payload,(noteText~="" and noteText or "Bot Gift"),CachedAvatarURL)
+                    -- keep amounts & checkboxes intact during auto loop
+                    UpdateStatus("Auto sent! ("..dailyData.count.."/50)",Color3.fromRGB(46,204,113))
+                else
+                    if dailyData.count>=50 then
+                        AddLimitLog(VerifiedUser)
+                        UpdateStatus("MAX LIMIT DAY CANT GIFT",Color3.fromRGB(231,76,60))
+                    else
+                        UpdateStatus("Auto fail: "..tostring(err or "?"),Color3.fromRGB(231,76,60))
+                    end
+                    task.wait(3)
+                end
+                task.wait(0.5)
+            end
+            isAutoGifting=false; AutoGiftBtn.Text="⚡ AUTO GIFT"
+            TweenService:Create(AutoGiftBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(155,89,182)}):Play()
+            -- reset amounts + uncheck all when auto gift loop ends
+            ResetAllAmounts()
+            for _,c in ipairs(ScrollList:GetChildren()) do
+                if c:IsA("Frame") then
+                    local cb=c:FindFirstChild("Checkbox")
+                    if cb then cb.Text="" end
+                end
+            end
+        end)
+    else
+        AutoGiftBtn.Text="⚡ AUTO GIFT"
+        TweenService:Create(AutoGiftBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(155,89,182)}):Play()
+        UpdateStatus("Auto Gift stopped.",Color3.fromRGB(150,150,150))
+        -- reset amounts + uncheck all when user manually stops
+        task.defer(function()
+            ResetAllAmounts()
+            for _,c in ipairs(ScrollList:GetChildren()) do
+                if c:IsA("Frame") then
+                    local cb=c:FindFirstChild("Checkbox")
+                    if cb then cb.Text="" end
+                end
+            end
+        end)
+    end
+end)    local function createStyledFrame(size, pos, anchor)
+        local f = Instance.new("Frame")
+        f.Size = size; f.Position = pos; f.AnchorPoint = anchor
+        f.BackgroundColor3 = Color3.fromRGB(255,255,255)
+        f.BackgroundTransparency = 0.3; f.BorderSizePixel = 0
+        local g = Instance.new("UIGradient", f)
+        g.Color = ColorSequence.new{
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(74,74,74)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(0,0,0))
+        }
+        Instance.new("UICorner", f).CornerRadius = UDim.new(1, 8)
+        local sh = Instance.new("ImageLabel", f)
+        sh.BackgroundTransparency = 1
+        sh.Position = UDim2.new(-0.32,0,-0.92,0)
+        sh.Size = UDim2.new(1.6,0,3.1,0)
+        sh.ZIndex = -1; sh.Image = "rbxassetid://9637602897"
+        sh.ImageColor3 = Color3.fromRGB(0,0,0); sh.ImageTransparency = 0.7
+        return f
+    end
+
+    local onPos  = UDim2.new(1,-margin,1,-margin)
+    local offPos = UDim2.new(1,140,1,-margin)
+
+    local Counter = createStyledFrame(UDim2.new(0,140,0,52), offPos, Vector2.new(1,1))
+    Counter.Name = "Counter"; Counter.Parent = CounterGui; Counter.Visible = true
+
+    local TL = Instance.new("TextLabel", Counter)
+    TL.Size = UDim2.new(0,63,0,23); TL.Position = UDim2.new(0.065,0,0.26,0)
+    TL.BackgroundTransparency = 1; TL.Text = "00:00:00"
+    TL.Font = Enum.Font.FredokaOne; TL.TextColor3 = Color3.fromRGB(255,255,255)
+    TL.TextScaled = true; TL.TextWrapped = true; TL.BorderSizePixel = 0
+
+    local IL = Instance.new("ImageLabel", Counter)
+    IL.Position = UDim2.new(0.59,1,0.10,3); IL.Size = UDim2.new(0,40,0,33)
+    IL.BackgroundTransparency = 1; IL.Image = "rbxassetid://1083501283"; IL.BorderSizePixel = 0
+
+    Instance.new("UIAspectRatioConstraint", Counter).AspectRatio = 2.635
+
+    task.spawn(function()
+        local i = 0
+        while task.wait(1) do
+            i += 1
+            TL.Text = string.format("%02d:%02d:%02d", math.floor(i/3600), math.floor((i%3600)/60), i%60)
+        end
+    end)
+
+    local _afkLast   = os.clock()
+    local _afkCamOff = 0.001
+
+    local function afkClick()
+        pcall(function()
+            local cf = workspace.CurrentCamera.CFrame
+            VirtualUser:Button1Down(Vector2.new(0,0),cf); task.wait(0.08)
+            VirtualUser:Button1Up(Vector2.new(0,0),cf)
+            VirtualUser:MoveMouse(Vector2.new(1,0)); task.wait(0.04)
+            VirtualUser:MoveMouse(Vector2.new(-1,0))
+        end)
+    end
+    local function afkNudge()
+        pcall(function()
+            local cam = workspace.CurrentCamera
+            if cam then _afkCamOff=-_afkCamOff; cam.CFrame=cam.CFrame*CFrame.Angles(0,_afkCamOff,0) end
+        end)
+    end
+
+    LocalPlayer.Idled:Connect(function() afkClick(); afkNudge(); _afkLast=os.clock() end)
+    task.spawn(function()
+        while true do
+            if os.clock()-_afkLast >= 25 then _afkLast=os.clock(); afkClick(); afkNudge() end
+            task.wait(1)
+        end
+    end)
+
+    local slideInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local function toggleCounter(v)
+        if v then
+            Counter.Visible = true
+            TweenService:Create(Counter, slideInfo, {Position=onPos}):Play()
+        else
+            local t = TweenService:Create(Counter, slideInfo, {Position=offPos})
+            t:Play(); t.Completed:Connect(function()
+                if Counter.Position == offPos then Counter.Visible = false end
+            end)
+        end
+    end
+    toggleCounter(true)
+
+    UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.KeyCode == Enum.KeyCode.RightControl then toggleCounter(not Counter.Visible) end
+    end)
+end
+
+-- ==========================================
+-- CONFIG
+-- ==========================================
+local KEYS_DATABASE = {
+    ["5151"]   = { IsAdmin = true },
+    ["lekama"] = { CheckExternalHWID = true, ExternalLink = "https://pastebin.com/raw/R71VyM0J" }
+}
+local GLOBAL_COOLDOWN = 9
+if not getgenv().LastGiftTime then getgenv().LastGiftTime = 0 end
+if not getgenv().MailboxConfig then
+    getgenv().MailboxConfig = {
+        MAIL_USERNAME={}, MAIL_ITEM_NAME={},
+        MAIL_NOTE="Bot Gift", SEND_INTERVAL=GLOBAL_COOLDOWN, AUTO_SEND=false,
+    }
+end
+local C  = getgenv().MailboxConfig
+local RS = game:GetService("ReplicatedStorage")
+local Net= require(RS:WaitForChild("SharedModules"):WaitForChild("Networking"))
+local PS = require(RS:WaitForChild("ClientModules"):WaitForChild("PlayerStateClient"))
+
+local STACK = {
+    Sprinklers=1,WateringCans=1,Mushrooms=1,Gnomes=1,Raccoons=1,Crates=1,
+    SeedPacks=1,Trowels=1,Props=1,Seeds=1,HarvestedFruits=1,Flashbangs=1,EmptyPots=1,
+}
+
+local IsVerified  = false
+local VerifiedUser= ""
+local CachedUID   = nil
+local CachedAvatarURL = ""   -- cached after verify
+
+-- ==========================================
+-- DAILY LIMIT (counter only, no longer blocks)
+-- ==========================================
+local function getResetTime() return math.floor(os.time()/86400)*86400 end
+local dailyData = { resetTime=getResetTime(), count=0 }
+
+local function saveDailyLimit()
+    pcall(function()
+        if writefile then
+            dailyData.resetTime = getResetTime()
+            writefile(limitFileName, HttpService:JSONEncode(dailyData))
+        end
+    end)
+end
+local function loadDailyLimit()
+    pcall(function()
+        local ar = getResetTime()
+        if isfile and isfile(limitFileName) and readfile then
+            local d = HttpService:JSONDecode(readfile(limitFileName))
+            if type(d)=="table" then
+                dailyData.count = (d.resetTime==ar) and (d.count or 0) or 0
+                if d.resetTime~=ar then saveDailyLimit() end
+            end
+        end
+    end)
+end
+loadDailyLimit()
+
+-- ==========================================
+-- WEBHOOK PERSISTENCE
+-- ==========================================
+if not getgenv().MailboxWebhookURL then getgenv().MailboxWebhookURL="" end
+local function saveWebhookURL(url)
+    pcall(function() if writefile then writefile(webhookFileName, HttpService:JSONEncode({url=url})) end end)
+    getgenv().MailboxWebhookURL = url
+end
+local function loadWebhookURL()
+    pcall(function()
+        if isfile and isfile(webhookFileName) and readfile then
+            local d=HttpService:JSONDecode(readfile(webhookFileName))
+            if type(d)=="table" and type(d.url)=="string" then getgenv().MailboxWebhookURL=d.url end
+        end
+    end)
+end
+loadWebhookURL()
+
+-- ==========================================
+-- INVENTORY HELPERS
+-- ==========================================
+local function getInv()
+    local ok,r = pcall(function() return PS:WaitForLocalReplica(10) end)
+    if ok and r and r.Data and type(r.Data.Inventory)=="table" then return r.Data.Inventory end
+    return nil
+end
+local function getCleanInventory()
+    local inv=getInv(); if not inv then return {} end
+    local list={}
+    if type(inv.Pets)=="table" then
+        local pc={}
+        for _,p in pairs(inv.Pets) do
+            if type(p)=="table" and p.Name and not p.Equipped then pc[p.Name]=(pc[p.Name]or 0)+1 end
+        end
+        for n,c in pairs(pc) do table.insert(list,{Name=n,Count=c,IsPet=true}) end
+    end
+    for cat in pairs(STACK) do
+        if type(inv[cat])=="table" then
+            for n,c in pairs(inv[cat]) do
+                if type(c)=="number" and c>0 then table.insert(list,{Name=n,Count=c,IsPet=false}) end
+            end
+        end
+    end
+    table.sort(list,function(a,b) return a.Name<b.Name end)
+    return list
+end
+local function getInvMap()
+    local m={}; for _,it in ipairs(getCleanInventory()) do m[it.Name]=it.Count end; return m
+end
+local function buildBatch(inv,items)
+    local out,max={},20
+    for name,amt in pairs(items) do
+        if #out>=max then break end
+        local want=math.max(1,math.floor(tonumber(amt)or 1))
+        if type(inv.Pets)=="table" then
+            for key,p in pairs(inv.Pets) do
+                if want<=0 or #out>=max then break end
+                if type(p)=="table" and p.Id and not p.Equipped and tostring(p.Name)==name then
+                    out[#out+1]={Category="Pets",ItemKey=key,Count=1}; want-=1
+                end
+            end
+        end
+        if want>0 then
+            for cat in pairs(STACK) do
+                local t=inv[cat]
+                if type(t)=="table" and type(t[name])=="number" and t[name]>0 then
+                    local sa=math.min(want,t[name])
+                    while sa>0 and #out<max do
+                        local ch=math.min(sa,9990)
+                        out[#out+1]={Category=cat,ItemKey=name,Count=ch}; sa-=ch
+                    end
+                    break
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function internalSendMail(targetUser,itemsPayload,noteText)
+    if not targetUser or targetUser=="" or not itemsPayload or not next(itemsPayload) then
+        return false,"Missing information"
+    end
+    local inv=getInv(); if not inv then return false,"Inventory not found" end
+    local batch=buildBatch(inv,itemsPayload)
+    if #batch==0 then return false,"Not enough items/pets" end
+    local uid=CachedUID
+    if not uid then
+        local ok,res=pcall(function() return Net.Mailbox.LookupPlayer:Fire(targetUser) end)
+        if not ok or type(res)~="number" or res<=0 then return false,"Server Error or invalid name" end
+        uid=res
+    end
+    local note = (noteText and noteText~="") and noteText or (C.MAIL_NOTE or "Bot Gift")
+    local ok,success,msg=pcall(function() return Net.Mailbox.SendBatch:Fire(uid,batch,note) end)
+    if success==true or success==nil then
+        getgenv().LastGiftTime=os.clock(); return true
+    else
+        CachedUID=nil; return false,tostring(msg or "Mailbox Error")
+    end
+end
+
+-- ==========================================
+-- ROBLOX AVATAR HELPER
+-- ==========================================
+local function GetAvatarURL(userId)
+    local url=""
+    pcall(function()
+        local r=game:HttpGet("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds="..tostring(userId).."&size=150x150&format=Png&isCircular=false")
+        local d=HttpService:JSONDecode(r)
+        if d and d.data and d.data[1] then url=d.data[1].imageUrl or "" end
+    end)
+    return url
+end
+
+-- ==========================================
+-- DISCORD WEBHOOK
+-- ==========================================
+local function FormatTS()
+    local ok,r=pcall(function() return os.date("%H:%M %d/%m/%y") end)
+    return ok and r or tostring(os.time())
+end
+local function SendWebhook(targetUser,targetUID,payload,note,avatarUrl)
+    local wh=getgenv().MailboxWebhookURL or ""
+    if wh=="" then return end
+    task.spawn(function()
+        local sender=LocalPlayer.Name
+        local total=0; local lines={}
+        for n,a in pairs(payload) do table.insert(lines,n.." x"..a); total=total+a end
+        local itemsStr=#lines>0 and table.concat(lines,"\n") or "Unknown Items"
+        local embed={
+            color=16711680, title="📦 Items Mailed",
+            description=string.format("**%s** mailed **%d** item(s) to **%s**",sender,total,targetUser),
+            fields={
+                {name="👤 Sender",       value=sender,               inline=true},
+                {name="📨 Recipient",    value=targetUser,            inline=true},
+                {name="🆔 Recipient ID", value=tostring(targetUID),  inline=true},
+                {name=string.format("📦 Items (%d total)",total), value=itemsStr, inline=false},
+                {name="📝 Note", value=(note~="" and note or "Bot Gift"), inline=false},
+            },
+            footer={text="Mail Logs by Le Kama • v3.0 • "..FormatTS()}
+        }
+        if avatarUrl and avatarUrl~="" then embed.thumbnail={url=avatarUrl} end
+        local body=HttpService:JSONEncode({embeds={embed}})
+        local sent=false
+        if not sent then pcall(function() if type(request)=="function" then request({Url=wh,Method="POST",Headers={["Content-Type"]="application/json"},Body=body}); sent=true end end) end
+        if not sent then pcall(function() if type(http_request)=="function" then http_request({Url=wh,Method="POST",Headers={["Content-Type"]="application/json"},Body=body}); sent=true end end) end
+        if not sent then pcall(function() if type(syn)=="table" and type(syn.request)=="function" then syn.request({Url=wh,Method="POST",Headers={["Content-Type"]="application/json"},Body=body}) end end) end
+    end)
+end
+
+-- ==========================================
+-- MAIN SCREEN GUI
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+pcall(function() ScreenGui.Parent=CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent=LocalPlayer:WaitForChild("PlayerGui") end
+ScreenGui.Name="MailboxGui_Premium"; ScreenGui.ResetOnSpawn=false
+
+local function ApplyHover(btn)
+    if not btn:IsA("TextButton") then return end
+    local oc=btn.BackgroundColor3
+    local h,s,v=Color3.toHSV(oc)
+    local hc=Color3.fromHSV(h,s,math.clamp(v+0.15,0,1))
+    local cc=Color3.fromHSV(h,s,math.clamp(v-0.15,0,1))
+    btn.MouseEnter:Connect(function()    TweenService:Create(btn,TweenInfo.new(0.15,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{BackgroundColor3=hc}):Play() end)
+    btn.MouseLeave:Connect(function()    TweenService:Create(btn,TweenInfo.new(0.25,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{BackgroundColor3=oc}):Play() end)
+    btn.MouseButton1Down:Connect(function() TweenService:Create(btn,TweenInfo.new(0.1,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{BackgroundColor3=cc}):Play() end)
+    btn.MouseButton1Up:Connect(function()   TweenService:Create(btn,TweenInfo.new(0.15,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{BackgroundColor3=hc}):Play() end)
+end
+
+-- ==========================================
 -- CUSTOM DRAG HELPER  (no Draggable=true)
 -- ==========================================
 local function MakeDraggable(frame, handle)
