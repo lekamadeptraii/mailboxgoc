@@ -57,7 +57,6 @@ do
     local onPos  = UDim2.new(1,-margin,1,-margin)
     local offPos = UDim2.new(1,140,1,-margin)
 
-    -- Đã làm nhỏ counter cho mobile
     local Counter = createStyledFrame(UDim2.new(0,120,0,45), offPos, Vector2.new(1,1))
     Counter.Name = "Counter"; Counter.Parent = CounterGui; Counter.Visible = true
 
@@ -144,6 +143,7 @@ if not getgenv().MailboxConfig then
     }
 end
 if not getgenv().MailboxPingId then getgenv().MailboxPingId = "" end
+if not getgenv().MailboxWebhookURL then getgenv().MailboxWebhookURL = "" end
 
 local C  = getgenv().MailboxConfig
 local RS = game:GetService("ReplicatedStorage")
@@ -189,22 +189,31 @@ end
 loadDailyLimit()
 
 -- ==========================================
--- WEBHOOK PERSISTENCE
+-- SETTINGS PERSISTENCE (Webhook & Ping)
 -- ==========================================
-if not getgenv().MailboxWebhookURL then getgenv().MailboxWebhookURL="" end
-local function saveWebhookURL(url)
-    pcall(function() if writefile then writefile(webhookFileName, HttpService:JSONEncode({url=url})) end end)
-    getgenv().MailboxWebhookURL = url
+local function saveSettings()
+    pcall(function()
+        if writefile then 
+            local data = {
+                url = getgenv().MailboxWebhookURL or "",
+                ping = getgenv().MailboxPingId or ""
+            }
+            writefile(webhookFileName, HttpService:JSONEncode(data)) 
+        end 
+    end)
 end
-local function loadWebhookURL()
+local function loadSettings()
     pcall(function()
         if isfile and isfile(webhookFileName) and readfile then
             local d=HttpService:JSONDecode(readfile(webhookFileName))
-            if type(d)=="table" and type(d.url)=="string" then getgenv().MailboxWebhookURL=d.url end
+            if type(d)=="table" then
+                if type(d.url)=="string" then getgenv().MailboxWebhookURL=d.url end
+                if type(d.ping)=="string" then getgenv().MailboxPingId=d.ping end
+            end
         end
     end)
 end
-loadWebhookURL()
+loadSettings()
 
 -- ==========================================
 -- INVENTORY HELPERS
@@ -451,9 +460,9 @@ MakeDraggable(MainFrame)
 -- Auto scale cho Mobile
 local uiScale = Instance.new("UIScale", MainFrame)
 if UserInputService.TouchEnabled and not UserInputService.MouseEnabled then
-    uiScale.Scale = 0.8 -- Nhỏ lại cho Mobile
+    uiScale.Scale = 0.8
 else
-    uiScale.Scale = 1.0 -- Bình thường trên PC
+    uiScale.Scale = 1.0
 end
 
 local ContentContainer = Instance.new("Frame")
@@ -889,28 +898,46 @@ SaveWebhookBtn.Size=UDim2.new(0,45,0,26); SaveWebhookBtn.Font=Enum.Font.GothamBo
 SaveWebhookBtn.Text="SAVE"; SaveWebhookBtn.TextColor3=Color3.fromRGB(255,255,255); SaveWebhookBtn.TextSize=10
 Instance.new("UICorner",SaveWebhookBtn).CornerRadius=UDim.new(0,6); ApplyHover(SaveWebhookBtn)
 
--- Discord Ping Input
+-- Discord Ping Row
 local PingInput = Instance.new("TextBox",GiftFrame)
 PingInput.BackgroundColor3=Color3.fromRGB(20,20,26); PingInput.Position=UDim2.new(0,10,0,367)
-PingInput.Size=UDim2.new(0,230,0,26); PingInput.Font=Enum.Font.Gotham
-PingInput.PlaceholderText="Discord Ping (ID, @everyone, @here)..."
+PingInput.Size=UDim2.new(0,180,0,26); PingInput.Font=Enum.Font.Gotham
+PingInput.PlaceholderText="Discord Ping (ID, @everyone)..."
 PingInput.Text=getgenv().MailboxPingId or ""
-PingInput.TextColor3=Color3.fromRGB(200,200,200); PingInput.TextSize=10; PingInput.ClearTextOnFocus=false
+PingInput.TextColor3=Color3.fromRGB(200,200,200); PingInput.TextSize=9; PingInput.ClearTextOnFocus=false
+PingInput.ClipsDescendants=true
 Instance.new("UICorner",PingInput).CornerRadius=UDim.new(0,6)
 local ps=Instance.new("UIStroke",PingInput); ps.Color=Color3.fromRGB(80,80,100); ps.Thickness=1
 
-PingInput.FocusLost:Connect(function()
-    getgenv().MailboxPingId = PingInput.Text
-end)
+local SavePingBtn = Instance.new("TextButton",GiftFrame)
+SavePingBtn.BackgroundColor3=Color3.fromRGB(0,140,255); SavePingBtn.Position=UDim2.new(0,195,0,367)
+SavePingBtn.Size=UDim2.new(0,45,0,26); SavePingBtn.Font=Enum.Font.GothamBold
+SavePingBtn.Text="SAVE"; SavePingBtn.TextColor3=Color3.fromRGB(255,255,255); SavePingBtn.TextSize=10
+Instance.new("UICorner",SavePingBtn).CornerRadius=UDim.new(0,6); ApplyHover(SavePingBtn)
+
 
 SaveWebhookBtn.MouseButton1Click:Connect(function()
-    local url=WebhookInput.Text:gsub("%s+",""); saveWebhookURL(url)
-    getgenv().MailboxPingId = PingInput.Text -- Save ping input temporarily on button click too
+    local url=WebhookInput.Text:gsub("%s+","")
+    getgenv().MailboxWebhookURL = url
+    saveSettings()
+    
     SaveWebhookBtn.Text="✓"
     TweenService:Create(SaveWebhookBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
     UpdateStatus("Webhook saved!",Color3.fromRGB(46,204,113))
     task.wait(1.5); SaveWebhookBtn.Text="SAVE"
     TweenService:Create(SaveWebhookBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(0,140,255)}):Play()
+end)
+
+SavePingBtn.MouseButton1Click:Connect(function()
+    local pingTxt = PingInput.Text
+    getgenv().MailboxPingId = pingTxt
+    saveSettings()
+
+    SavePingBtn.Text="✓"
+    TweenService:Create(SavePingBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(46,204,113)}):Play()
+    UpdateStatus("Ping Setting saved!",Color3.fromRGB(46,204,113))
+    task.wait(1.5); SavePingBtn.Text="SAVE"
+    TweenService:Create(SavePingBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(0,140,255)}):Play()
 end)
 
 -- ==========================================
